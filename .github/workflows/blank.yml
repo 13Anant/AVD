@@ -1,0 +1,54 @@
+name: Add-New-SessionHost
+
+on:
+  #schedule:
+  #  - cron: "*/120 * * * *"
+   workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  armDeploy:
+    runs-on: ubuntu-latest
+    outputs:
+      cnt: ${{steps.PSC.outputs.cnt}}
+
+    steps:
+      - name: Runner checkout 
+        uses: actions/checkout@v3
+
+#This action is using marketplace action called Azure login - to login to an azure environment(service principal already setup), with input parameter called 'AZ_CREDS' that are stored inside the GitHub secrets section
+      - name: Azure Login
+        uses: Azure/login@v1
+        with:
+          #creds: ${{secrets.AVD_CREDS}}
+          client-id: ${{secrets.AZ_CLIENT_ID}}
+          tenant-id: ${{secrets.AZ_TENANT_ID}}
+          subscription-id: ${{secrets.AZ_SUB_ID}}
+          enable-AzPSSession: true
+
+
+      - name: PS to compare AVD count with AD Group count
+        id: PSC
+        uses: Azure/powershell@v1
+        with:
+          inlineScript: |
+            $grp=(Get-AzADGroupMember -ObjectID "d93dc1dd-b23d-47ef-852e-a9b51ab65ac1").count
+            $hst=(Get-AzWvdSessionHost -HostPoolName Zeta  -ResourceGroupName ICT-P-AVD-RSG01).count
+            $cnt=$grp-$hst
+            Write-Host -NoNewLine "Difference Value: "$cnt -ForegroundColor Cyan `n
+            Write-Output "::set-output name=cnt::$cnt"        
+          azPSVersion: "latest"
+   #     run: echo "::set-output name=cnt::$cnt"        
+   
+      - name: Deploy SessionHost
+        if: ${{steps.PSC.outputs.cnt > 0 }}  
+        uses: Azure/powershell@v1
+        with:
+          inlineScript: |
+            Write-Host "*************Printing Count value here: **************"${{steps.PSC.outputs.cnt}}
+          azPSVersion: "latest"
+
+
